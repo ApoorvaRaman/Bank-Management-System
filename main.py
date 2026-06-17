@@ -311,7 +311,8 @@ while True:
         print("====================================")
         print("1.CREATE ACCOUNT")
         print("2.LOGIN")
-        print("3.EXIT")
+        print("3.FORGOT PIN")
+        print("4.EXIT")
         try:
             ch = int(input("Enter your choice : "))
             if ch == 1:
@@ -326,6 +327,8 @@ while True:
                     print("Invalid Account Or Pin")
                     print("---------------------------")
             elif ch == 3:
+                b.forgot()
+            elif ch == 4:
                 db.close()
                 print("Exiting...")
                 exit()
@@ -343,9 +346,8 @@ while True:
         print("2.DEPOSIT")
         print("3.WITHDRAWAL")
         print("4.CHANGE PIN")
-        print("5.FORGOT PIN")
-        print("6.DELETE ACCOUNT")
-        print("7.LOGOUT")
+        print("5.DELETE ACCOUNT")
+        print("6.LOGOUT")
         try:
             ch = int(input("Enter your choice : "))
             if ch == 1:
@@ -357,10 +359,8 @@ while True:
             elif ch == 4:
                 b.change_pin()
             elif ch == 5:
-                b.forgot()
-            elif ch == 6:
                 b.delete_acc()
-            elif ch == 7:
+            elif ch == 6:
                 b.logout()
             else:
                 print("Invalid Choice!")
