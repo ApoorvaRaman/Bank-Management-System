@@ -41,7 +41,7 @@ def login():
     return False
 def hash_pin(pin, salt):
     return hashlib.sha256((pin + salt).encode()).hexdigest()
-class bank:
+class Bank:
     def create_new_acc(self):
         name=input("Enter your name : ")
         mobile=input("Enter your phone number : ")
@@ -80,6 +80,7 @@ class bank:
             except Error as e:
                 db.rollback()
                 print("Database Error:",e)
+                return
             print("---------------------------------------")
             print("      ACCOUNT CREATED SUCCESSFULLY")
             print("---------------------------------------")
@@ -117,6 +118,7 @@ class bank:
             except Error as e:
                 db.rollback()
                 print("Database Error:",e)
+                return
             print("------------------------------")
             print("Pin Changed Successfully")
             print("------------------------------")
@@ -130,7 +132,11 @@ class bank:
             print("Please login first")
             return
         user_acc = current_user["acc_no"]
-        new_amount = int(input("Amount : "))
+        try:
+            new_amount = int(input("Amount : "))
+        except ValueError:
+            print("Invalid Amount")
+            return
         if new_amount <= 0:
             print("Amount must be greater than zero")
             return
@@ -149,22 +155,22 @@ class bank:
         except Error as e:
             db.rollback()
             print("Database Error:",e)
+            return
         result_data=cursor.fetchone()
         print("-----------------------------------")
         print("Amount Deposited Successfully")
         print(f"Current Balance : ",result_data[0])
         print("-----------------------------------")
-    else:
-        print("---------------------------")
-        print("Account Not Found")
-        print("Invalid Account or Pin!")
-        print("----------------------------")
     def debit_amount(self):
         if not current_user:
             print("Please login first")
             return
         user_acc = current_user["acc_no"]
-        user_amount=int(input("Enter Amount : "))
+        try:
+            user_amount=int(input("Enter Amount : "))
+        except ValueError:
+            print("Invalid Amount")
+            return
         if user_amount <= 0:
             print("Amount must be greater than zero")
             return
@@ -174,6 +180,7 @@ class bank:
         except Error as e:
             db.rollback()
             print("Database Error:",e)
+            return
         data=cursor.fetchone()
         remaining_balance = data[0] - user_amount
         if user_amount>data[0]:
@@ -199,6 +206,7 @@ class bank:
             except Error as e:
                 db.rollback()
                 print("Database Error:",e)
+                return
             data=cursor.fetchone()
             print("-------------------------------")
             print("Amount Withdrawal Completed Successfully")
@@ -209,7 +217,10 @@ class bank:
             print("Please login first")
             return
         user_acc = current_user["acc_no"]
-        if result[3]!=0:
+        query = "SELECT balance FROM account WHERE acc_no=%s"
+        cursor.execute(query,(user_acc,))
+        data = cursor.fetchone()
+        if data[0] != 0:
             print("Account has some balance")
             return
         else:
@@ -218,14 +229,16 @@ class bank:
             if user_response=='y' or user_response=='Y':
                 query="DELETE FROM account WHERE acc_no=%s"
                 try:
-                    cursor.execute(query,(acc,))
+                    cursor.execute(query,(user_acc,))
                     db.commit()
                 except Error as e:
                     db.rollback()
                     print("Database Error:",e)
+                    return
                 print("---------------------------------")
                 print("Account Deleted Successfully ")
                 print("---------------------------------")
+                self.logout()
             else:
                 return  
     def show_all(self):
@@ -277,6 +290,7 @@ class bank:
                 except Error as e:
                     db.rollback()
                     print("Database Error:",e)
+                    return
                 print("------------------------------")
                 print("Pin Changed Successfully")
                 print("-------------------------------")
@@ -295,6 +309,7 @@ class bank:
         except Error as e:
             db.rollback()
             print("Database Error:",e)
+            return
         res=cursor.fetchall()
         print("=========== ACCOUNT INFO ============")
         for row in res:
@@ -303,7 +318,7 @@ class bank:
             print("PHONE NUMBER   : ",row[1])
             print("BALANCE        : ",row[2])
             break
-b = bank()
+b = Bank()
 while True:
     while current_user is None:
         print("====================================")
