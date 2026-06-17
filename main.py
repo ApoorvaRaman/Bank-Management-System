@@ -15,10 +15,8 @@ db=mysql.connector.connect(
 )
 cursor=db.cursor()
 current_user = None
-user_acc = None
 def login():
     global current_user
-    global user_acc
     acc_no = input("Account : ")
     pin = input("PIN : ")
     query = """
@@ -39,7 +37,6 @@ def login():
             "customer_id": user[0],
             "acc_no": user[1]
         }
-        user_acc = current_user["acc_no"]
         return True
     return False
 def hash_pin(pin, salt):
@@ -92,6 +89,12 @@ class bank:
             print("----------------------------------")
             print(" Invalid input! Pin must be 4-digit")
             print("----------------------------------")
+    def logout(self):
+        global current_user
+        current_user = None
+        print("------------------------")
+        print("Logged Out Successfully")
+        print("------------------------")
     def change_pin(self):
         if not current_user:
             print("Please login first")
@@ -300,40 +303,68 @@ class bank:
             print("PHONE NUMBER   : ",row[1])
             print("BALANCE        : ",row[2])
             break
-b=bank()
+b = bank()
 while True:
-    print("====================================")
-    print("       BANK MANAGEMENT SYSTEM    ")
-    print("====================================")
-    print("1.CREATE ACCOUNT\n2.ACCOUNT INFO\n3.DEPOSIT\n4.WITHDRAWAL\n5.CHANGE PIN\n6.FORGOT PIN \n7.DELETE ACCOUNT\n8.EXIT")
-    try:
-        ch=int(input("Enter your choice : "))
-        if ch==1:
-            b.create_new_acc()
-        elif ch==2:
-            b.acc_info()
-        elif ch==3:
-            b.credit_balance()
-        elif ch==4:
-            b.debit_amount()
-        elif ch==5:
-            b.change_pin()
-        elif ch==6:
-            b.forgot()
-        elif ch==7:
-            b.delete_acc()
-        elif ch==8:
-            try:
-                db.commit()
-            except Error as e:
-                db.rollback()
-                print("Database Error:",e)
-            db.close()
-            print("Exiting...\n")
-            break
-        else:
-            print("Invalid choice! Try Again")
-    except ValueError:
-        print("=====================================")
-        print("Invalid Input!")
-        print("=====================================")
+    while current_user is None:
+        print("====================================")
+        print("       BANK MANAGEMENT SYSTEM")
+        print("====================================")
+        print("1.CREATE ACCOUNT")
+        print("2.LOGIN")
+        print("3.EXIT")
+        try:
+            ch = int(input("Enter your choice : "))
+            if ch == 1:
+                b.create_new_acc()
+            elif ch == 2:
+                if login():
+                    print("---------------------------")
+                    print("Login Successful")
+                    print("---------------------------")
+                else:
+                    print("---------------------------")
+                    print("Invalid Account Or Pin")
+                    print("---------------------------")
+            elif ch == 3:
+                db.close()
+                print("Exiting...")
+                exit()
+            else:
+                print("Invalid Choice!")
+        except ValueError:
+            print("---------------------------")
+            print("Invalid Input!")
+            print("---------------------------")
+    while current_user is not None:
+        print("====================================")
+        print("         CUSTOMER MENU")
+        print("====================================")
+        print("1.ACCOUNT INFO")
+        print("2.DEPOSIT")
+        print("3.WITHDRAWAL")
+        print("4.CHANGE PIN")
+        print("5.FORGOT PIN")
+        print("6.DELETE ACCOUNT")
+        print("7.LOGOUT")
+        try:
+            ch = int(input("Enter your choice : "))
+            if ch == 1:
+                b.acc_info()
+            elif ch == 2:
+                b.credit_balance()
+            elif ch == 3:
+                b.debit_amount()
+            elif ch == 4:
+                b.change_pin()
+            elif ch == 5:
+                b.forgot()
+            elif ch == 6:
+                b.delete_acc()
+            elif ch == 7:
+                b.logout()
+            else:
+                print("Invalid Choice!")
+        except ValueError:
+            print("---------------------------")
+            print("Invalid Input!")
+            print("---------------------------")
