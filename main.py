@@ -6,7 +6,7 @@ from mysql.connector import Error
 required = ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"]
 for var in required:
     if not os.getenv(var):
-        raise ValueError(f"Missing environment variable: {var}")
+        raise ValueError(f"Missing Environment Variable: {var}")
 db=mysql.connector.connect(
     host=os.getenv("DB_HOST"),
     user=os.getenv("DB_USER"),
@@ -17,8 +17,8 @@ cursor=db.cursor()
 current_user = None
 def login():
     global current_user
-    acc_no = input("Account : ")
-    pin = input("PIN : ")
+    acc_no = input("Enter Account No. : ")
+    pin = input("Enter PIN : ")
     query = """
     SELECT customer_id,acc_no,pin_hash,salt
     FROM account
@@ -28,7 +28,7 @@ def login():
         cursor.execute(query,(acc_no,))
     except Error as e:
         db.rollback()
-        print("Database Error:",e)
+        print("Database Error : ",e)
     user = cursor.fetchone()
     if not user:
         return False
@@ -43,13 +43,13 @@ def hash_pin(pin, salt):
     return hashlib.sha256((pin + salt).encode()).hexdigest()
 class Bank:
     def create_new_acc(self):
-        name=input("Enter your name : ")
-        mobile=input("Enter your phone number : ")
-        balance=int(input("Deposit Some Amount (Minimum balance = Rs. 500) : "))
+        name=input("Enter Your Name : ")
+        mobile=input("Enter Your Phone No. : ")
+        balance=int(input("Deposit Amount (Minimum Balance = Rs. 500) : "))
         if balance < 500:
-            print("Minimum opening balance is 500")
+            print("Minimum Balance is Rs. 500")
             return
-        pin=input("Set a 4-digit pin : ")
+        pin=input("Set 4-digit PIN : ")
         if len(pin)==4 and pin.isdigit():
             salt = secrets.token_hex(16)
             pin_hash = hash_pin(pin, salt)
@@ -79,29 +79,37 @@ class Bank:
                 db.commit()
             except Error as e:
                 db.rollback()
-                print("Database Error:",e)
+                print("Database Error : ",e)
                 return
-            print("---------------------------------------")
-            print("      ACCOUNT CREATED SUCCESSFULLY")
-            print("---------------------------------------")
-            print(f"Holder name : {name}\nAccount Number : {acc}\nBalance : {balance}")
-            print("---------------------------------------")
+            print("Account Created Successfully")
+            print(f"Holder Name : {name}\nAccount No. : {acc}\nBalance : {balance}")
         else:
-            print("----------------------------------")
-            print(" Invalid input! Pin must be 4-digit")
-            print("----------------------------------")
+            print("Invalid Input! PIN must be 4-digit")
     def logout(self):
         global current_user
         current_user = None
-        print("------------------------")
         print("Logged Out Successfully")
-        print("------------------------")
     def change_pin(self):
         if not current_user:
-            print("Please login first")
+            print("Please Login First")
             return
         user_acc = current_user["acc_no"]
-        new_pin=input("Enter new pin : ")
+        old_pin = input("Enter Current PIN : ")
+        query = """
+        SELECT pin_hash,salt
+        FROM account
+        WHERE acc_no=%s
+        """
+        try:
+            cursor.execute(query,(user_acc,))
+        except Error as e:
+            print("Database Error:",e)
+            return
+        data = cursor.fetchone()
+        if hash_pin(old_pin,data[1]) != data[0]:
+            print("Incorrect PIN")
+            return
+        new_pin=input("Enter New PIN : ")
         if len(new_pin) == 4 and new_pin.isdigit():
             salt = secrets.token_hex(16)
             pin_hash = hash_pin(new_pin,salt)
@@ -117,19 +125,17 @@ class Bank:
                 db.commit()
             except Error as e:
                 db.rollback()
-                print("Database Error:",e)
+                print("Database Error : ",e)
                 return
-            print("------------------------------")
-            print("Pin Changed Successfully")
-            print("------------------------------")
+            print("PIN Changed Successfully")
+        elif new_pin == old_pin:
+            print("New PIN cannot be same as old PIN")
+            return
         else:
-            print("---------------------------")
-            print("Account Not Found")
-            print("Invalid Account or Pin!")
-            print("----------------------------")
+            print("Invalid PIN!")
     def credit_balance(self):
         if not current_user:
-            print("Please login first")
+            print("Please Login First")
             return
         user_acc = current_user["acc_no"]
         try:
@@ -138,7 +144,7 @@ class Bank:
             print("Invalid Amount")
             return
         if new_amount <= 0:
-            print("Amount must be greater than zero")
+            print("Amount Must Be Greater Than Zero")
             return
         query="UPDATE account SET balance=balance+%s WHERE acc_no=%s"
         values=(new_amount,user_acc)
@@ -310,9 +316,9 @@ class Bank:
             db.rollback()
             print("Database Error:",e)
             return
-        res=cursor.fetchall()
+        res=cursor.fetchone()
         print("=========== ACCOUNT INFO ============")
-        for row in res:
+        if res:
             print("ACCOUNT NUMBER : ",user_acc)
             print("HOLDER NAME    : ",row[0])
             print("PHONE NUMBER   : ",row[1])
