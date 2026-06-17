@@ -3,6 +3,10 @@ import os
 import hashlib
 import secrets
 from mysql.connector import Error
+required = ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"]
+for var in required:
+    if not os.getenv(var):
+        raise ValueError(f"Missing environment variable: {var}")
 db=mysql.connector.connect(
     host=os.getenv("DB_HOST"),
     user=os.getenv("DB_USER"),
