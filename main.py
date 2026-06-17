@@ -42,18 +42,6 @@ def login():
         user_acc = current_user["acc_no"]
         return True
     return False
-def verification():
-    user_acc=input("Account : ")
-    user_pin=int(input("Enter PIN : "))
-    query="SELECT *FROM account WHERE acc_no=%s AND pin=%s"
-    value=(user_acc,user_pin)
-    try:
-        cursor.execute(query,value)
-    except Error as e:
-        db.rollback()
-        print("Database Error:",e)
-    result=cursor.fetchone()
-    return result,user_acc   
 def hash_pin(pin, salt):
     return hashlib.sha256((pin + salt).encode()).hexdigest()
 class bank:
@@ -105,143 +93,138 @@ class bank:
             print(" Invalid input! Pin must be 4-digit")
             print("----------------------------------")
     def change_pin(self):
-        result,user_acc=verification()
-        if result:
-            new_pin=input("Enter new pin : ")
-            if len(new_pin) == 4 and new_pin.isdigit():
-                salt = secrets.token_hex(16)
-                pin_hash = hash_pin(new_pin,salt)
-                query = """
-                UPDATE account
-                SET pin_hash=%s,
-                    salt=%s
-                WHERE acc_no=%s
-                """
-                values=(pin_hash,salt,user_acc)
-                try:
-                    cursor.execute(query,values)
-                    db.commit()
-                except Error as e:
-                    db.rollback()
-                    print("Database Error:",e)
-                print("------------------------------")
-                print("Pin Changed Successfully")
-                print("------------------------------")
-        else:
-            print("---------------------------")
-            print("Account Not Found")
-            print("Invalid Account or Pin!")
-            print("----------------------------")
-    def credit_balance(self):
-        result,user_acc=verification()
-        if result:
-            new_amount = int(input("Amount : "))
-            if new_amount <= 0:
-                print("Amount must be greater than zero")
-                return
-            query="UPDATE account SET balance=balance+%s WHERE acc_no=%s"
-            values=(new_amount,user_acc)
+        if not current_user:
+            print("Please login first")
+            return
+        user_acc = current_user["acc_no"]
+        new_pin=input("Enter new pin : ")
+        if len(new_pin) == 4 and new_pin.isdigit():
+            salt = secrets.token_hex(16)
+            pin_hash = hash_pin(new_pin,salt)
+            query = """
+            UPDATE account
+            SET pin_hash=%s,
+            salt=%s
+            WHERE acc_no=%s
+            """
+            values=(pin_hash,salt,user_acc)
             try:
                 cursor.execute(query,values)
                 db.commit()
             except Error as e:
                 db.rollback()
                 print("Database Error:",e)
-            query="SELECT balance FROM account WHERE acc_no=%s"
-            values=(user_acc,)
-            try:
-                cursor.execute(query,values)
-            except Error as e:
-                db.rollback()
-                print("Database Error:",e)
-            result_data=cursor.fetchone()
-            print("-----------------------------------")
-            print("Amount Deposited Successfully")
-            print(f"Current Balance : ",result_data[0])
-            print("-----------------------------------")
+            print("------------------------------")
+            print("Pin Changed Successfully")
+            print("------------------------------")
         else:
             print("---------------------------")
             print("Account Not Found")
             print("Invalid Account or Pin!")
             print("----------------------------")
+    def credit_balance(self):
+        if not current_user:
+            print("Please login first")
+            return
+        user_acc = current_user["acc_no"]
+        new_amount = int(input("Amount : "))
+        if new_amount <= 0:
+            print("Amount must be greater than zero")
+            return
+        query="UPDATE account SET balance=balance+%s WHERE acc_no=%s"
+        values=(new_amount,user_acc)
+        try:
+            cursor.execute(query,values)
+            db.commit()
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
+        query="SELECT balance FROM account WHERE acc_no=%s"
+        values=(user_acc,)
+        try:
+            cursor.execute(query,values)
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
+        result_data=cursor.fetchone()
+        print("-----------------------------------")
+        print("Amount Deposited Successfully")
+        print(f"Current Balance : ",result_data[0])
+        print("-----------------------------------")
+    else:
+        print("---------------------------")
+        print("Account Not Found")
+        print("Invalid Account or Pin!")
+        print("----------------------------")
     def debit_amount(self):
-        result,user_acc=verification()
-        if result:
-            user_amount=int(input("Enter Amount : "))
-            if user_amount <= 0:
-                print("Amount must be greater than zero")
-                return
-            query="SELECT balance FROM account WHERE acc_no=%s"
+        if not current_user:
+            print("Please login first")
+            return
+        user_acc = current_user["acc_no"]
+        user_amount=int(input("Enter Amount : "))
+        if user_amount <= 0:
+            print("Amount must be greater than zero")
+            return
+        query="SELECT balance FROM account WHERE acc_no=%s"
+        try:
+            cursor.execute(query,(user_acc,))
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
+        data=cursor.fetchone()
+        remaining_balance = data[0] - user_amount
+        if user_amount>data[0]:
+            print("---------------------------")
+            print("Insufficient balance")
+            print("Balance : ",data[0])
+            print("---------------------------")
+            return
+        elif remaining_balance < 500:
+            print("---------------------------")
+            print("Account Must Have Minimum Balance = Rs. 500") 
+            print("Current Balance : ",data[0])
+            print("---------------------------")
+            return
+        else:
+            query="UPDATE account SET balance=balance-%s WHERE acc_no=%s"
+            values=(user_amount,user_acc)
             try:
+                cursor.execute(query,values)
+                db.commit()
+                query="SELECT balance FROM account WHERE acc_no=%s"
                 cursor.execute(query,(user_acc,))
             except Error as e:
                 db.rollback()
                 print("Database Error:",e)
             data=cursor.fetchone()
-            remaining_balance = data[0] - user_amount
-            if user_amount>data[0]:
-                print("---------------------------")
-                print("Insufficient balance")
-                print("Balance : ",data[0])
-                print("---------------------------")
-                return
-            elif remaining_balance < 500:
-                print("---------------------------")
-                print("Account Must Have Minimum Balance = Rs. 500") 
-                print("Current Balance : ",data[0])
-                print("---------------------------")
-            else:
-                query="UPDATE account SET balance=balance-%s WHERE acc_no=%s"
-                values=(user_amount,user_acc)
+            print("-------------------------------")
+            print("Amount Withdrawal Completed Successfully")
+            print("Current Balance : ",data[0])
+            print("-------------------------------")
+    def delete_acc(self):
+        if not current_user:
+            print("Please login first")
+            return
+        user_acc = current_user["acc_no"]
+        if result[3]!=0:
+            print("Account has some balance")
+            return
+        else:
+            print("Are you sure you want to delete your account permanently? (y/n) : ")
+            user_response=input()
+            if user_response=='y' or user_response=='Y':
+                query="DELETE FROM account WHERE acc_no=%s"
                 try:
-                    cursor.execute(query,values)
+                    cursor.execute(query,(acc,))
                     db.commit()
                 except Error as e:
                     db.rollback()
                     print("Database Error:",e)
-                query="SELECT balance FROM account WHERE acc_no=%s"
-                try:
-                    cursor.execute(query,(user_acc,))
-                except Error as e:
-                    db.rollback()
-                    print("Database Error:",e)
-                data=cursor.fetchone()
-                print("-------------------------------")
-                print("Amount Withdrawal Completed Successfully")
-                print("Current Balance : ",data[0])
-                print("-------------------------------")
-        else:
-            print("---------------------------")
-            print("Account Not Found")
-            print("Invalid Account or Pin!")
-            print("----------------------------")
-    def delete_acc(self):
-        result,acc=verification()
-        if result:
-            if result[3]!=0:
-                print("ACCOUNT HAS SOME BALANCE")
-                return
+                print("---------------------------------")
+                print("Account Deleted Successfully ")
+                print("---------------------------------")
             else:
-                print("Are you sure you want to delete your account permanently? (y/n) : ")
-                user_response=input()
-                if user_response=='y' or user_response=='Y':
-                    query="DELETE FROM account WHERE acc_no=%s"
-                    try:
-                        cursor.execute(query,(acc,))
-                        db.commit()
-                    except Error as e:
-                        db.rollback()
-                        print("Database Error:",e)
-                    print("---------------------------------")
-                    print("Account Deleted Successfully ")
-                    print("---------------------------------")
-                else:
-                    return  
-        else:
-            print("---------------------------")
-            print("Account Not Found")
-            print("Invalid Account or Pin!")
-            print("----------------------------")   
+                return  
     def show_all(self):
         query="SELECT acc_no,name FROM account"
         try:
@@ -299,26 +282,24 @@ class bank:
             print("Invalid Account or Mobile!")
             print("----------------------------")
     def acc_info(self):
-        result,user_acc=verification()
-        if result:
-            query="SELECT name,mobile,balance FROM account WHERE acc_no=%s"
-            try:
-                cursor.execute(query,(user_acc,))
-            except Error as e:
-                db.rollback()
-                print("Database Error:",e)
-            res=cursor.fetchall()
-            print("=========== ACCOUNT INFO ============")
-            for row in res:
-                print("ACCOUNT NUMBER : ",user_acc)
-                print("HOLDER NAME    : ",row[0])
-                print("PHONE NUMBER   : ",row[1])
-                print("BALANCE        : ",row[2])
-                break
-        else:
-            print("---------------------")
-            print("  ACCOUNT NOT FOUND  ")
-            print("----------------------")
+        if not current_user:
+            print("Please login first")
+            return
+        user_acc = current_user["acc_no"]
+        query="SELECT name,mobile,balance FROM account WHERE acc_no=%s"
+        try:
+            cursor.execute(query,(user_acc,))
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
+        res=cursor.fetchall()
+        print("=========== ACCOUNT INFO ============")
+        for row in res:
+            print("ACCOUNT NUMBER : ",user_acc)
+            print("HOLDER NAME    : ",row[0])
+            print("PHONE NUMBER   : ",row[1])
+            print("BALANCE        : ",row[2])
+            break
 b=bank()
 while True:
     print("====================================")
