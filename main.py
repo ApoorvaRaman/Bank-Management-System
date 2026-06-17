@@ -1,5 +1,8 @@
 import mysql.connector
 import random
+import hashlib
+import secrets
+from mysql.connector import Error
 db=mysql.connector.connect(
     host="localhost",
     user="username",
@@ -7,29 +10,70 @@ db=mysql.connector.connect(
     database="DB_name"
 )
 cursor=db.cursor()
-def acc_generate():
-    password=random.randint(1,99)
-    return "ACC28"+str(password)
+current_user = None
+user_acc = None
+def login():
+    global current_user
+    global user_acc
+    acc_no = input("Account : ")
+    pin = input("PIN : ")
+    query = """
+    SELECT customer_id,pin_hash,salt
+    FROM account
+    WHERE acc_no=%s
+    """
+    try:
+        cursor.execute(query,(acc_no,))
+    except Error as e:
+        db.rollback()
+        print("Database Error:",e)
+    user = cursor.fetchone()
+    if not user:
+        return False
+    if hash_pin(pin,user[2]) == user[1]:
+        current_user = {
+            "customer_id": user[0],
+            "acc_no": user[1]
+        }
+        user_acc = current_user["acc_no"]
+        return True
+    return False
 def verification():
     user_acc=input("Account : ")
     user_pin=int(input("Enter PIN : "))
     query="SELECT *FROM account WHERE acc_no=%s AND pin=%s"
     value=(user_acc,user_pin)
-    cursor.execute(query,value)
+    try:
+        cursor.execute(query,value)
+    except Error as e:
+        db.rollback()
+        print("Database Error:",e)
     result=cursor.fetchone()
     return result,user_acc   
+def hash_pin(pin, salt):
+    return hashlib.sha256((pin + salt).encode()).hexdigest()
 class bank:
     def create_new_acc(self):
-        acc=acc_generate()
+        customer_id = cursor.lastrowid
+        acc = f"ACC{100000 + customer_id}"
         name=input("Enter your name : ")
-        mobile=int(input("Enter your phone number : "))
-        balance=int(input("Deposit Some amount min(100) : "))
+        mobile=input("Enter your phone number : ")
+        balance=int(input("Deposit Some Amount (Minimum balance = Rs. 500) : "))
+        if balance < 500:
+            print("Minimum opening balance is 500")
+            return
         pin=input("Set a 4-digit Pin : ")
         if len(pin)==4 and pin.isdigit():
-            query="INSERT INTO account(acc_no,name,mobile,balance,pin) VALUES(%s,%s,%s,%s,%s)"
-            values=(acc,name,mobile,balance,pin)
-            cursor.execute(query,values)
-            db.commit()
+            salt = secrets.token_hex(16)
+            pin_hash = hash_pin(pin, salt)
+            query="INSERT INTO account(acc_no,name,mobile,balance,salt,pin_hash) VALUES(%s,%s,%s,%s,%s)"
+            values=(acc,name,mobile,balance,salt,pin_hash)
+            try:
+                cursor.execute(query,values)
+                db.commit()
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             print("---------------------------------------")
             print("      ACCOUNT CREATED SUCCESSFULLY")
             print("---------------------------------------")
@@ -43,13 +87,25 @@ class bank:
         result,user_acc=verification()
         if result:
             new_pin=int(input("Enter new pin : "))
-            query="UPDATE account SET pin=%s WHERE acc_no=%s"
-            values=(new_pin,user_acc)
-            cursor.execute(query,values)
-            db.commit()
-            print("------------------------------")
-            print("     Pin Changed Successfully  ")
-            print("------------------------------")
+            if len(new_pin) == 4 and new_pin.isdigit():
+                salt = secrets.token_hex(16)
+                pin_hash = hash_pin(new_pin,salt)
+                query = """
+                UPDATE account
+                SET pin_hash=%s,
+                    salt=%s
+                WHERE acc_no=%s
+                """
+                values=(pin_hash,salt,user_acc)
+                try:
+                    cursor.execute(query,values)
+                    db.commit()
+                except Error as e:
+                    db.rollback()
+                    print("Database Error:",e)
+                print("------------------------------")
+                print("Pin Changed Successfully")
+                print("------------------------------")
         else:
             print("---------------------------")
             print("Account Not Found")
@@ -58,14 +114,25 @@ class bank:
     def credit_balance(self):
         result,user_acc=verification()
         if result:
-            new_amount=int(input("Amount : "))
+            new_amount = int(input("Amount : "))
+            if new_amount <= 0:
+                print("Amount must be greater than zero")
+                return
             query="UPDATE account SET balance=balance+%s WHERE acc_no=%s"
             values=(new_amount,user_acc)
-            cursor.execute(query,values)
-            db.commit()
+            try:
+                cursor.execute(query,values)
+                db.commit()
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             query="SELECT balance FROM account WHERE acc_no=%s"
             values=(user_acc,)
-            cursor.execute(query,values)
+            try:
+                cursor.execute(query,values)
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             result_data=cursor.fetchone()
             print("-----------------------------------")
             print("Amount Deposited Successfully")
@@ -80,22 +147,43 @@ class bank:
         result,user_acc=verification()
         if result:
             user_amount=int(input("Enter Amount : "))
+            if user_amount <= 0:
+                print("Amount must be greater than zero")
+                return
             query="SELECT balance FROM account WHERE acc_no=%s"
-            cursor.execute(query,(user_acc,))
+            try:
+                cursor.execute(query,(user_acc,))
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             data=cursor.fetchone()
+            remaining_balance = data[0] - user_amount
             if user_amount>data[0]:
                 print("---------------------------")
-                print("     Insufficient balance  ")
+                print("Insufficient balance")
                 print("Balance : ",data[0])
                 print("---------------------------")
                 return
+            elif remaining_balance < 500:
+                print("---------------------------")
+                print("Account Must Have Minimum Balance = Rs. 500") 
+                print("Current Balance : ",data[0])
+                print("---------------------------")
             else:
                 query="UPDATE account SET balance=balance-%s WHERE acc_no=%s"
                 values=(user_amount,user_acc)
-                cursor.execute(query,values)
-                db.commit()
+                try:
+                    cursor.execute(query,values)
+                    db.commit()
+                except Error as e:
+                    db.rollback()
+                    print("Database Error:",e)
                 query="SELECT balance FROM account WHERE acc_no=%s"
-                cursor.execute(query,(user_acc,))
+                try:
+                    cursor.execute(query,(user_acc,))
+                except Error as e:
+                    db.rollback()
+                    print("Database Error:",e)
                 data=cursor.fetchone()
                 print("-------------------------------")
                 print("Amount Withdrawal Completed Successfully")
@@ -117,10 +205,14 @@ class bank:
                 user_response=input()
                 if user_response=='y' or user_response=='Y':
                     query="DELETE FROM account WHERE acc_no=%s"
-                    cursor.execute(query,(acc,))
-                    db.commit()
+                    try:
+                        cursor.execute(query,(acc,))
+                        db.commit()
+                    except Error as e:
+                        db.rollback()
+                        print("Database Error:",e)
                     print("---------------------------------")
-                    print("  Account Deleted Successfully ")
+                    print("Account Deleted Successfully ")
                     print("---------------------------------")
                 else:
                     return  
@@ -131,7 +223,11 @@ class bank:
             print("----------------------------")   
     def show_all(self):
         query="SELECT acc_no,name FROM account"
-        cursor.execute(query)
+        try:
+            cursor.execute(query)
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
         result=cursor.fetchall()
         if result:
             print("========= All Accounts =============")
@@ -143,33 +239,53 @@ class bank:
                 i+=1
         else:
             print("----------------------")
-            print("      No Accounts    ")
+            print("No Accounts")
             print("----------------------")
     def forgot(self):
         user_acc=input("Account No.:")
         mobile=int(input("Enter Registered Phone No.:"))
         query="SELECT * FROM account WHERE acc_no=%s AND mobile=%s"
         values=(user_acc,mobile)
-        cursor.execute(query,values)
+        try:
+            cursor.execute(query,values)
+        except Error as e:
+            db.rollback()
+            print("Database Error:",e)
         result=cursor.fetchone()
         if result:
             new_pin=int(input("Enter New Pin : "))
-            query="UPDATE account SET pin=%s WHERE acc_no=%s"
-            values=(new_pin,user_acc)
-            cursor.execute(query,values)
-            db.commit()
-            print("------------------------------")
-            print("   PIN CHANGED SUCCESSFULLY")
-            print("-------------------------------")
+            if len(new_pin) == 4 and new_pin.isdigit():
+                salt = secrets.token_hex(16)
+                pin_hash = hash_pin(new_pin,salt)
+                query = """
+                UPDATE account
+                SET pin_hash=%s,
+                    salt=%s
+                WHERE acc_no=%s
+                """
+                values=(pin_hash,salt,user_acc)
+                try: 
+                    cursor.execute(query,values)
+                    db.commit()
+                except Error as e:
+                    db.rollback()
+                    print("Database Error:",e)
+                print("------------------------------")
+                print("Pin Changed Successfully")
+                print("-------------------------------")
         else:
-            print("---------------------------")
+            print("----------------------------")
             print("Invalid Account or Mobile!")
             print("----------------------------")
     def acc_info(self):
         result,user_acc=verification()
         if result:
             query="SELECT name,mobile,balance FROM account WHERE acc_no=%s"
-            cursor.execute(query,(user_acc,))
+            try:
+                cursor.execute(query,(user_acc,))
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             res=cursor.fetchall()
             print("=========== ACCOUNT INFO ============")
             for row in res:
@@ -205,12 +321,17 @@ while True:
         elif ch==7:
             b.delete_acc()
         elif ch==8:
+            try:
+                db.commit()
+            except Error as e:
+                db.rollback()
+                print("Database Error:",e)
             db.close()
-            print("EXITING...\n")
+            print("Exiting...\n")
             break
         else:
             print("Invalid choice! Try Again")
     except ValueError:
         print("=====================================")
-        print("           Invalid input!")
+        print("Invalid Input!")
         print("=====================================")
