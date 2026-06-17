@@ -22,7 +22,7 @@ def login():
     acc_no = input("Account : ")
     pin = input("PIN : ")
     query = """
-    SELECT customer_id,pin_hash,salt
+    SELECT customer_id,acc_no,pin_hash,salt
     FROM account
     WHERE acc_no=%s
     """
@@ -34,7 +34,7 @@ def login():
     user = cursor.fetchone()
     if not user:
         return False
-    if hash_pin(pin,user[2]) == user[1]:
+    if hash_pin(pin,user[3]) == user[2]:
         current_user = {
             "customer_id": user[0],
             "acc_no": user[1]
@@ -58,22 +58,39 @@ def hash_pin(pin, salt):
     return hashlib.sha256((pin + salt).encode()).hexdigest()
 class bank:
     def create_new_acc(self):
-        customer_id = cursor.lastrowid
-        acc = f"ACC{100000 + customer_id}"
         name=input("Enter your name : ")
         mobile=input("Enter your phone number : ")
         balance=int(input("Deposit Some Amount (Minimum balance = Rs. 500) : "))
         if balance < 500:
             print("Minimum opening balance is 500")
             return
-        pin=input("Set a 4-digit Pin : ")
+        pin=input("Set a 4-digit pin : ")
         if len(pin)==4 and pin.isdigit():
             salt = secrets.token_hex(16)
             pin_hash = hash_pin(pin, salt)
-            query="INSERT INTO account(acc_no,name,mobile,balance,salt,pin_hash) VALUES(%s,%s,%s,%s,%s)"
-            values=(acc,name,mobile,balance,salt,pin_hash)
+            query = """
+            INSERT INTO account
+            (name,mobile,balance,pin_hash,salt)
+            VALUES(%s,%s,%s,%s,%s)
+            """
+            values = (
+                name,
+                mobile,
+                balance,
+                pin_hash,
+                salt
+            )
             try:
                 cursor.execute(query,values)
+                db.commit()
+                customer_id = cursor.lastrowid
+                acc = f"ACC{100000 + customer_id}"
+                query = """
+                UPDATE account
+                SET acc_no=%s
+                WHERE customer_id=%s
+                """
+                cursor.execute(query,(acc,customer_id))
                 db.commit()
             except Error as e:
                 db.rollback()
@@ -90,7 +107,7 @@ class bank:
     def change_pin(self):
         result,user_acc=verification()
         if result:
-            new_pin=int(input("Enter new pin : "))
+            new_pin=input("Enter new pin : ")
             if len(new_pin) == 4 and new_pin.isdigit():
                 salt = secrets.token_hex(16)
                 pin_hash = hash_pin(new_pin,salt)
@@ -247,7 +264,7 @@ class bank:
             print("----------------------")
     def forgot(self):
         user_acc=input("Account No.:")
-        mobile=int(input("Enter Registered Phone No.:"))
+        mobile=input("Enter Registered Phone No.:")
         query="SELECT * FROM account WHERE acc_no=%s AND mobile=%s"
         values=(user_acc,mobile)
         try:
@@ -257,7 +274,7 @@ class bank:
             print("Database Error:",e)
         result=cursor.fetchone()
         if result:
-            new_pin=int(input("Enter New Pin : "))
+            new_pin=input("Enter New Pin : ")
             if len(new_pin) == 4 and new_pin.isdigit():
                 salt = secrets.token_hex(16)
                 pin_hash = hash_pin(new_pin,salt)
